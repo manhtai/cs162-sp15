@@ -1,0 +1,196 @@
+#main {
+    padding-top: 70px;
+    padding-bottom: 50px;
+}
+table td, th {
+    text-align: center;
+}
+h2, h3, h4, h5 {
+    font-weight: 500;
+    padding-top: 8px;
+}
+
+/* Reading table */
+
+img.book {
+    width: 200px;
+}
+
+/* Projects sidebar hacks for days */
+
+.metro .sidebar.light li a:hover {
+    background-color: #555;
+}
+.metro .sidebar.light li.active a {
+    background-color: #555;
+    color: #fff;
+}
+.metro .sidebar {
+    height: auto;
+    width: auto;
+}
+.affix-top {
+    position: fixed;
+}
+@media (min-width: 954px) {
+    .projleft {
+        width: 25%;
+    }
+    .projright {
+        width: 75%;
+    }
+}
+@media (min-width: 1200px) {
+    .projleft {
+        width: 20%;
+    }
+    .projright {
+        width: 80%;
+    }
+}
+@media (max-width: 954px) {
+    .affix-top {
+        position: static;
+    }
+}
+
+/* Staff page profile pictures */
+
+.profilepic {
+    display: block;
+    overflow: hidden;
+    margin: 0 auto;
+    height: 210px;
+    width: 165px;
+}
+#instructor {
+    height: 300px;
+    width: 220px;
+}
+.profilepic img {
+    /* Otherwise it keeps some space around baseline */
+    display: block;
+    /* Scale up to fill container width */
+    min-width: 100%;
+    /* Scale up to fill container height */
+    min-height: 100%;
+    /* Scaled images look a bit better in IE now */
+    -ms-interpolation-mode: bicubic;
+}
+.profile p {
+    text-align: center;
+}
+.profile {
+    padding-top: 30px;
+}
+.staff {
+    padding-top: 10px;
+    font-weight: bold;
+    font-size: 130%;
+    text-align: center;
+}
+
+/* Calendar styling */
+
+table#calendar {
+    border: 1px solid #eee;
+    margin: auto;
+    font-size: 12px;
+    width: 100%;
+}
+table#calendar td {
+    padding: 5px;
+    margin: 4px;
+    border: 1px solid #ccc;
+}
+table#calendar .td-left {
+    text-align: left;
+}
+table#calendar th {
+    padding: 5px;
+    margin: 4px;
+    border: 1px solid #ccc;
+    background-color: #2c3e50;
+    color: #fff;
+    font-weight: bold;
+}
+table#calendar .proj1 {
+    background-color: #c4e6ff;
+}
+table#calendar .proj2 {
+    background-color: #cbe9b0;
+}
+table#calendar .proj3 {
+    background-color: #ffe4b4;
+}
+table#calendar .gray-bg {
+    background: #eee;
+}
+table#calendar tr th:nth-child(2) {
+    width: 60px;
+}
+table#calendar tr th:nth-child(4) {
+    text-align: left;
+}
+table#calendar tr:not(:first-child):hover td:not(.weeknum) {
+    background: #ffffd8;
+}
+
+/* Schedule styling */
+
+table#schedule {
+    margin-top: 20px;
+    width: 100%;
+}
+table#schedule td {
+    border: 1px solid #ccc;
+    font-size: 14px;
+}
+table#schedule tr th:first-child {
+    width: 12%;
+}
+table#schedule th {
+    width: 17.6%;
+    border: 1px solid #ccc;
+    background-color: #eee;
+    color: #555;
+}
+table#schedule tr:first-child th {
+    height: 40px;
+}
+.split {
+    width: 8.8%;
+}
+.sched-lec {
+    background-color: #c4e6ff;
+}
+.sched-dis {
+    background-color: #cbe9b0;
+}
+.min30 {
+    height: 30px;
+}
+.sched-oh {
+    background-color: #ffe4b4;
+}
+.sched-oh-prof {
+    background-color: #ffffd8;
+}
+
+table#schedule td.noborder {
+    border: none;
+}
+
+
+/* Textbooks styling */
+
+table#textbooks {
+    border: 1px solid #eee;
+    margin: auto;
+    width: 100%;
+}
+table#textbooks td {
+    padding: 5px;
+    margin: 4px;
+    border: 1px solid #ccc;
+}
