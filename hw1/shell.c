@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -92,20 +93,59 @@ int lookup(char cmd[]) {
   return -1;
 }
 
+/* Check whether a program p is excutable, if yes, return, if not find in PATH */
+char* get_executable(char *p) {
+  struct stat sb;
+
+  /* check if p is absolute path */
+  if (strstr(p, "/")) {
+    return p;
+  }
+
+  /* check if p executable */
+  if (stat(p, &sb) == 0 && sb.st_mode & S_IXUSR) {
+    return p;
+  }
+
+  /* find p in PATH */
+  char* path = getenv("PATH");
+  size_t p_len = strlen(p);
+  char *token = strtok(path, ":");
+
+  while(token) {
+    char* fullpath = malloc(p_len + strlen(token) + 2);
+    sprintf(fullpath, "%s/%s", token, p);
+
+    /* check if fullpath executable */
+    if (stat(fullpath, &sb) == 0 && sb.st_mode & S_IXUSR) {
+      return fullpath;
+    }
+
+    token = strtok(NULL, ":");
+    free(fullpath);
+  }
+
+  return p;
+}
+
 /* execute command from file */
 int fork_then_exec(struct tokens *tokens) {
   size_t n = tokens_get_length(tokens);
+
   int child_pid = fork();
 
   if (child_pid == 0) { /* I'm child */
     char* prog = tokens_get_token(tokens, 0);
+    prog = get_executable(prog);
     char** argv = malloc((n+1)*sizeof(char *));
 
-    for(int j=0;j<n;j++) {
+    argv[0] = prog;
+    for(int j=1;j<n;j++) {
       argv[j] = tokens_get_token(tokens, j);
     }
     argv[n] = NULL;
     execv(prog, argv);
+    free(argv);
   } else { /* I'm parent */
     int status;
     wait(&status);
