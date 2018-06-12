@@ -144,8 +144,34 @@ int fork_then_exec(struct tokens *tokens) {
       argv[j] = tokens_get_token(tokens, j);
     }
     argv[n] = NULL;
-    execv(prog, argv);
+
+
+    /* check for < and > */
+    int in_out = -1;
+    if (n > 2 && (strcmp(argv[n-2], "<") == 0 || strcmp(argv[n-2], ">") == 0)) {
+      if (strcmp(argv[n-2], "<") == 0) {
+          freopen(argv[n-1], "r", stdin);
+          in_out = 0;
+      } else {
+          freopen(argv[n-1], "w", stdout);
+          in_out = 1;
+      }
+      argv[n-2] = NULL;
+      argv[n-1] = NULL;
+    }
+
+    int result = execv(prog, argv);
+    if (result == -1) perror("execv() error");
+
     free(argv);
+
+    /* close our open fd */
+    if (in_out == 0) {
+      fclose(stdin);
+    } else if (in_out == 1) {
+      fclose(stdout);
+    }
+
   } else { /* I'm parent */
     int status;
     wait(&status);
