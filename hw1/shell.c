@@ -31,6 +31,7 @@ int cmd_exit(struct tokens *tokens);
 int cmd_help(struct tokens *tokens);
 int cmd_cd(struct tokens *tokens);
 int cmd_pwd(struct tokens *tokens);
+int fork_then_exec(struct tokens *tokens);
 
 /* Built-in command functions take token array (see parse.h) and return int */
 typedef int cmd_fun_t(struct tokens *tokens);
@@ -64,6 +65,9 @@ int cmd_exit(unused struct tokens *tokens) {
 /* cd & pwd from libc */
 int cmd_cd(struct tokens *tokens) {
   char* cd = tokens_get_token(tokens, 1);
+  if (cd == NULL)
+    cd = getenv("HOME");
+
   if (chdir(cd) == 0)
     printf("%s\n", cd);
   else
@@ -71,7 +75,7 @@ int cmd_cd(struct tokens *tokens) {
   return 1;;
 }
 
-int cmd_pwd(struct tokens *tokens) {
+int cmd_pwd(unused struct tokens *tokens) {
   char cwd[1024];
   if (getcwd(cwd, sizeof(cwd)) != NULL)
     printf("%s\n", cwd);
@@ -86,6 +90,27 @@ int lookup(char cmd[]) {
     if (cmd && (strcmp(cmd_table[i].cmd, cmd) == 0))
       return i;
   return -1;
+}
+
+/* execute command from file */
+int fork_then_exec(struct tokens *tokens) {
+  size_t n = tokens_get_length(tokens);
+  int child_pid = fork();
+
+  if (child_pid == 0) { /* I'm child */
+    char* prog = tokens_get_token(tokens, 0);
+    char** argv = malloc((n+1)*sizeof(char *));
+
+    for(int j=0;j<n;j++) {
+      argv[j] = tokens_get_token(tokens, j);
+    }
+    argv[n] = NULL;
+    execv(prog, argv);
+  } else { /* I'm parent */
+    int status;
+    wait(&status);
+  }
+  return 1;
 }
 
 /* Intialization procedures for this shell */
@@ -134,8 +159,7 @@ int main(unused int argc, unused char *argv[]) {
     if (fundex >= 0) {
       cmd_table[fundex].fun(tokens);
     } else {
-      /* REPLACE this to run commands as programs. */
-      fprintf(stdout, "This shell doesn't know how to run programs.\n");
+      fork_then_exec(tokens);
     }
 
     if (shell_is_interactive)
