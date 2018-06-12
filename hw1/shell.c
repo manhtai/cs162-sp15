@@ -32,6 +32,7 @@ int cmd_exit(struct tokens *tokens);
 int cmd_help(struct tokens *tokens);
 int cmd_cd(struct tokens *tokens);
 int cmd_pwd(struct tokens *tokens);
+int cmd_wait(unused struct tokens *tokens);
 int fork_then_exec(struct tokens *tokens);
 
 /* Built-in command functions take token array (see parse.h) and return int */
@@ -49,6 +50,7 @@ fun_desc_t cmd_table[] = {
   {cmd_exit, "exit", "exit the command shell"},
   {cmd_cd, "cd", "change directory"},
   {cmd_pwd, "pwd", "output current working directory"},
+  {cmd_wait, "wait", "wait for background processes to stop"},
 };
 
 /* Prints a helpful description for the given command */
@@ -85,6 +87,15 @@ int cmd_pwd(unused struct tokens *tokens) {
   return 1;
 }
 
+int cmd_wait(unused struct tokens *tokens) {
+  int status;
+  pid_t pid;
+  while ((pid = wait(&status)) > 0) {
+    printf("process [%d] terminated.\n", pid);
+  }
+  return 1;
+}
+
 /* Looks up the built-in command, if it exists. */
 int lookup(char cmd[]) {
   for (unsigned int i = 0; i < sizeof(cmd_table) / sizeof(fun_desc_t); i++)
@@ -108,7 +119,7 @@ char* get_executable(char *p) {
   }
 
   /* find p in PATH */
-  char* path = getenv("PATH");
+  char* path = strdup(getenv("PATH"));
   size_t p_len = strlen(p);
   char *token = strtok(path, ":");
 
@@ -124,28 +135,55 @@ char* get_executable(char *p) {
     token = strtok(NULL, ":");
     free(fullpath);
   }
-
+  free(path);
   return p;
 }
+
+
+  /* Ignore & unignore signals */
+void ignore_signal(void) {
+  signal(SIGINT, SIG_IGN);
+  signal(SIGQUIT, SIG_IGN);
+  signal(SIGTSTP, SIG_IGN);
+  signal(SIGTTIN, SIG_IGN);
+  signal(SIGTTOU, SIG_IGN);
+  signal(SIGCHLD, SIG_IGN);
+}
+
+void unignore_signal(void) {
+  signal(SIGINT, SIG_DFL);
+  signal(SIGQUIT, SIG_DFL);
+  signal(SIGTSTP, SIG_DFL);
+  signal(SIGTTIN, SIG_DFL);
+  signal(SIGTTOU, SIG_DFL);
+  signal(SIGCHLD, SIG_DFL);
+}
+
 
 /* execute command from file */
 int fork_then_exec(struct tokens *tokens) {
   size_t n = tokens_get_length(tokens);
 
+  if (n == 0) return 1;
+
+  /* set argv to run */
+  char** argv = malloc((n+1)*sizeof(char *));
+  for(int j=0;j<n;j++) {
+    argv[j] = tokens_get_token(tokens, j);
+  }
+  argv[0] = get_executable(argv[0]);
+  argv[n] = NULL;
+
+  /* check for & */
+  int bg = 0;
+  if (strcmp(argv[n-1], "&") == 0) {
+    bg = 1;
+    argv[n-1] = NULL;
+    n--;
+  }
+
   int child_pid = fork();
-
   if (child_pid == 0) { /* I'm child */
-    char* prog = tokens_get_token(tokens, 0);
-    prog = get_executable(prog);
-    char** argv = malloc((n+1)*sizeof(char *));
-
-    argv[0] = prog;
-    for(int j=1;j<n;j++) {
-      argv[j] = tokens_get_token(tokens, j);
-    }
-    argv[n] = NULL;
-
-
     /* check for < and > */
     int in_out = -1;
     if (n > 2 && (strcmp(argv[n-2], "<") == 0 || strcmp(argv[n-2], ">") == 0)) {
@@ -160,10 +198,12 @@ int fork_then_exec(struct tokens *tokens) {
       argv[n-1] = NULL;
     }
 
-    int result = execv(prog, argv);
-    if (result == -1) perror("execv() error");
+    /* unignore signal */
+    unignore_signal();
 
-    free(argv);
+    /* exec */
+    int result = execv(argv[0], argv);
+    if (result == -1) perror("execv() error");
 
     /* close our open fd */
     if (in_out == 0) {
@@ -171,11 +211,16 @@ int fork_then_exec(struct tokens *tokens) {
     } else if (in_out == 1) {
       fclose(stdout);
     }
-
   } else { /* I'm parent */
-    int status;
-    wait(&status);
+    if (!bg) {
+      int status;
+      wait(&status);
+    } else {
+      printf("[%d]: %s\n", child_pid, argv[0]);
+    }
   }
+
+  free(argv);
   return 1;
 }
 
@@ -196,6 +241,12 @@ void init_shell() {
 
     /* Saves the shell's process id */
     shell_pgid = getpid();
+
+    /* Put shell in its own process group */
+    setpgid(shell_pgid, shell_pgid);
+
+    /* ignore signal */
+    ignore_signal();
 
     /* Take control of the terminal */
     tcsetpgrp(shell_terminal, shell_pgid);
