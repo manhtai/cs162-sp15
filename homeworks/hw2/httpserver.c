@@ -32,11 +32,11 @@ char *server_proxy_hostname;
 int server_proxy_port;
 
 
-void cat(char* filename, char** buffer);
-void ls(char* dir, char** result);
-void serve_directory(char* dir, char** result);
+int cat(char* filename, char** result);
+int ls(char* dir, char** result);
+char* serve_directory(char* dir, char** result, int* size);
 
-void http200(int fd, char* message);
+void http200(int fd, char* message, char* mime_type, int size);
 void http404(int fd);
 void http500(int fd);
 /*
@@ -53,93 +53,122 @@ void http500(int fd);
 void handle_files_request(int fd) {
   struct http_request *request = http_request_parse(fd);
 
-  char* list;
-  list = malloc(1);
-  if (list == NULL) {
-    http404(fd);
-    return;
-  }
-
   char* full_path = malloc(strlen(server_files_directory) + strlen(request->path) + 1);
   sprintf(full_path, "%s%s", server_files_directory, request->path);
 
-
-  list[0] = '\0';
-
-  serve_directory(full_path, &list);
+  char* content = malloc(1);
+  int size = 0;
+  char* mime_type = serve_directory(full_path, &content, &size);
+  size = size ? size : strlen(content);
   free(full_path);
 
-  if (list == NULL || strlen(list) == 0) {
+  if (content == NULL || strlen(content) == 0) {
     http404(fd);
     return;
   }
-  http200(fd, list);
+  http200(fd, content, mime_type, size);
 }
 
 
-/* Display list files in directory, or server index.html */
-void serve_directory(char* dir, char** result) {
-  ls(dir, result);
-  if (strstr(*result, "index.html") != NULL) {
-    char* index = 0;
-    char* filename = malloc(strlen(server_files_directory) + strlen("index.html") + 2);
-    sprintf(filename, "%s/%s", server_files_directory, "index.html");
+/* Display list files in directory, or server index.html, return mime type */
+char* serve_directory(char* dir, char** result, int* size) {
+  char* mime_type = http_get_mime_type("index.html");
 
-    cat(filename, &index);
-    free(filename);
+  /* If it's a file */
+  int is_dir = ls(dir, result);
+  if (is_dir == 0) {
+    *size = cat(dir, result);
+    if (*size) {
+      mime_type = http_get_mime_type(dir);
+    }
+    return mime_type;
+  }
+
+  /* If directory contains no index.html */
+  if (strstr(*result, "index.html") == NULL) {
+    return mime_type;
+  }
+
+  /* If directory contains a index.html */
+  char* index = 0;
+  char* filename = malloc(strlen(server_files_directory) + strlen("index.html") + 2);
+  sprintf(filename, "%s/%s", server_files_directory, "index.html");
+
+  *size = cat(filename, &index);
+  if (*size) {
     free(*result);
     *result = index;
+  } else {
+    free(index);
   }
+  free(filename);
+  return mime_type;
 }
 
 
-/* Get content of filename then put to buffer */
-void cat(char* filename, char** buffer) {
-  long length;
+/* Get content of filename then put to result, return file size if it's a file, 0 otherwise */
+int cat(char* filename, char** result) {
+  int length = 1 << 17; /* Max file size allowed */
+  int size = 0;
   FILE* f = fopen(filename, "rb");
 
-  if (f) {
-    fseek(f, 0, SEEK_END);
-    length = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    *buffer = malloc(length);
-    if (*buffer) {
-      fread(*buffer, 1, length, f);
-    }
-    fclose (f);
+  if (f == NULL) {
+    return 0;
   }
+
+  *result = malloc(length);
+  if (*result) {
+    size = fread(*result, 1, length, f);
+  }
+  fclose(f);
+  return size;
 }
 
-/* List files & sub directories in a directory */
-void ls(char* dir, char** result) {
+/* List files & sub directories in a directory, return 1 if it's a directory, 0 otherwise */
+int ls(char* dir, char** result) {
     struct dirent *de;
     size_t size = 0;
 
     DIR *dr = opendir(dir);
 
     if (dr == NULL) {
-      cat(dir, result);
-      return;
+      return 0;
     }
 
+    /* Header part */
+    char* header = "<h1>Index</h1>";
+    size = strlen(header)+1;
+    *result = realloc(*result, size);
+    strcat(*result, header);
+
+    char* line_template = "<a href='%s'>%s</a>";
+    char* name = malloc(1);
     while ((de = readdir(dr)) != NULL) {
-      size += de->d_namlen;
-      *result = realloc(*result, size+2); // 2 for \n
+      size += 2*(de->d_namlen)+strlen(line_template)+strlen("<br />")+1;
+      *result = realloc(*result, size);
       if (*result == NULL) {
         break;
       }
-      strcat(*result, de->d_name);
-      strcat(*result, "\n");
+      name = realloc(name, 2*(de->d_namlen)+strlen(line_template));
+      sprintf(name, line_template, de->d_name, de->d_name);
+      strcat(*result, name);
+      strcat(*result, "<br />");
     }
     closedir(dr);
+
+    free(name);
+    return 1;
 }
 
-void http200(int fd, char* message) {
+void http200(int fd, char* message, char* mime_type, int size) {
+  char content_length[64];
+  sprintf(content_length, "%d", size);
   http_start_response(fd, 200);
-  http_send_header(fd, "Content-type", http_get_mime_type("index.html"));
+  http_send_header(fd, "Content-type", mime_type);
+  http_send_header(fd, "Content-Length", content_length);
   http_send_header(fd, "Server", "httpserver/1.0");
   http_end_headers(fd);
-  http_send_string(fd, message);
+  http_send_data(fd, message, size);
 }
 
 void http500(int fd) {
