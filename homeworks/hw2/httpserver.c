@@ -32,6 +32,13 @@ char *server_proxy_hostname;
 int server_proxy_port;
 
 
+void cat(char* filename, char** buffer);
+void ls(char* dir, char** result);
+void serve_directory(char* dir, char** result);
+
+void http200(int fd, char* message);
+void http404(int fd);
+void http500(int fd);
 /*
  * Reads an HTTP request from stream (fd), and writes an HTTP response
  * containing:
@@ -44,22 +51,113 @@ int server_proxy_port;
  *   4) Send a 404 Not Found response.
  */
 void handle_files_request(int fd) {
-
-  /*
-   * TODO: Your solution for Task 1 goes here! Feel free to delete/modify *
-   * any existing code.
-   */
-
   struct http_request *request = http_request_parse(fd);
 
+  char* list;
+  list = malloc(1);
+  if (list == NULL) {
+    http404(fd);
+    return;
+  }
+
+  char* full_path = malloc(strlen(server_files_directory) + strlen(request->path) + 1);
+  sprintf(full_path, "%s%s", server_files_directory, request->path);
+
+
+  list[0] = '\0';
+
+  serve_directory(full_path, &list);
+  free(full_path);
+
+  if (list == NULL || strlen(list) == 0) {
+    http404(fd);
+    return;
+  }
+  http200(fd, list);
+}
+
+
+/* Display list files in directory, or server index.html */
+void serve_directory(char* dir, char** result) {
+  ls(dir, result);
+  if (strstr(*result, "index.html") != NULL) {
+    char* index = 0;
+    char* filename = malloc(strlen(server_files_directory) + strlen("index.html") + 2);
+    sprintf(filename, "%s/%s", server_files_directory, "index.html");
+
+    cat(filename, &index);
+    free(filename);
+    free(*result);
+    *result = index;
+  }
+}
+
+
+/* Get content of filename then put to buffer */
+void cat(char* filename, char** buffer) {
+  long length;
+  FILE* f = fopen(filename, "rb");
+
+  if (f) {
+    fseek(f, 0, SEEK_END);
+    length = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    *buffer = malloc(length);
+    if (*buffer) {
+      fread(*buffer, 1, length, f);
+    }
+    fclose (f);
+  }
+}
+
+/* List files & sub directories in a directory */
+void ls(char* dir, char** result) {
+    struct dirent *de;
+    size_t size = 0;
+
+    DIR *dr = opendir(dir);
+
+    if (dr == NULL) {
+      cat(dir, result);
+      return;
+    }
+
+    while ((de = readdir(dr)) != NULL) {
+      size += de->d_namlen;
+      *result = realloc(*result, size+2); // 2 for \n
+      if (*result == NULL) {
+        break;
+      }
+      strcat(*result, de->d_name);
+      strcat(*result, "\n");
+    }
+    closedir(dr);
+}
+
+void http200(int fd, char* message) {
   http_start_response(fd, 200);
+  http_send_header(fd, "Content-type", http_get_mime_type("index.html"));
+  http_send_header(fd, "Server", "httpserver/1.0");
+  http_end_headers(fd);
+  http_send_string(fd, message);
+}
+
+void http500(int fd) {
+  http_start_response(fd, 500);
   http_send_header(fd, "Content-Type", "text/html");
+  http_send_header(fd, "Server", "httpserver/1.0");
+  http_end_headers(fd);
+  http_send_string(fd, "Internal server error.");
+}
+
+void http404(int fd) {
+  http_start_response(fd, 404);
+  http_send_header(fd, "Content-Type", "text/html");
+  http_send_header(fd, "Server", "httpserver/1.0");
   http_end_headers(fd);
   http_send_string(fd,
       "<center>"
-      "<h1>Welcome to httpserver!</h1>"
-      "<hr>"
-      "<p>Nothing's here yet.</p>"
+      "<h1>404 - Not found!</h1>"
       "</center>");
 }
 
