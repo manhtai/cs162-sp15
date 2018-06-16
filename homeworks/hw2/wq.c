@@ -5,7 +5,7 @@
 /* Initializes a work queue WQ. */
 void wq_init(wq_t *wq) {
 
-  /* TODO: Make me thread-safe! */
+  /* FIXME: Do we need thread-safe here? */
 
   wq->size = 0;
   wq->head = NULL;
@@ -15,7 +15,7 @@ void wq_init(wq_t *wq) {
  * is at least one item on the queue. */
 int wq_pop(wq_t *wq) {
 
-  /* TODO: Make me blocking and thread-safe! */
+  /* FIXME: Do we need thread-safe here? */
 
   wq_item_t *wq_item = wq->head;
   int client_socket_fd = wq->head->client_socket_fd;
@@ -29,7 +29,7 @@ int wq_pop(wq_t *wq) {
 /* Add ITEM to WQ. */
 void wq_push(wq_t *wq, int client_socket_fd) {
 
-  /* TODO: Make me thread-safe! */
+  /* FIXME: Do we need thread-safe here? */
 
   wq_item_t *wq_item = calloc(1, sizeof(wq_item_t));
   wq_item->client_socket_fd = client_socket_fd;

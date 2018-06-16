@@ -16,7 +16,7 @@
 #include <unistd.h>
 
 #include "libhttp.h"
-#include "wq.h"
+#include "threadpool.h"
 
 /*
  * Global configuration variables.
@@ -250,13 +250,6 @@ void handle_proxy_request(int fd) {
   */
 }
 
-
-void init_thread_pool(int num_threads, void (*request_handler)(int)) {
-  /*
-   * TODO: Part of your solution for Task 2 goes here!
-   */
-}
-
 /*
  * Opens a TCP stream socket on all interfaces with port number PORTNO. Saves
  * the fd number of the server socket in *socket_number. For each accepted
@@ -299,7 +292,11 @@ void serve_forever(int *socket_number, void (*request_handler)(int)) {
 
   printf("Listening on port %d...\n", server_port);
 
-  init_thread_pool(num_threads, request_handler);
+  threadpool* thpool = thread_pool_init(num_threads, &work_queue, request_handler);
+  if (thpool == NULL) {
+    perror("Can't init threadpool");
+    exit(errno);
+  }
 
   while (1) {
     client_socket_number = accept(*socket_number,
@@ -314,15 +311,14 @@ void serve_forever(int *socket_number, void (*request_handler)(int)) {
         inet_ntoa(client_address.sin_addr),
         client_address.sin_port);
 
-    // TODO: Change me?
-    request_handler(client_socket_number);
-    close(client_socket_number);
+    thread_pool_add(thpool, client_socket_number);
 
     printf("Accepted connection from %s on port %d\n",
         inet_ntoa(client_address.sin_addr),
         client_address.sin_port);
   }
 
+  thread_pool_shutdown(thpool);
   shutdown(*socket_number, SHUT_RDWR);
   close(*socket_number);
 }
@@ -398,6 +394,10 @@ int main(int argc, char **argv) {
       fprintf(stderr, "Unrecognized option: %s\n", argv[i]);
       exit_with_usage();
     }
+  }
+
+  if (!num_threads) {
+    num_threads = 1;
   }
 
   if (server_files_directory == NULL && server_proxy_hostname == NULL) {
