@@ -290,7 +290,7 @@ void serve_forever(int *socket_number, void (*request_handler)(int)) {
     exit(errno);
   }
 
-  printf("Listening on port %d...\n", server_port);
+  printf("Listening on port %d with %d threads...\n", server_port, num_threads);
 
   threadpool* thpool = thread_pool_init(num_threads, &work_queue, request_handler);
   if (thpool == NULL) {
@@ -312,10 +312,6 @@ void serve_forever(int *socket_number, void (*request_handler)(int)) {
         client_address.sin_port);
 
     thread_pool_add(thpool, client_socket_number);
-
-    printf("Accepted connection from %s on port %d\n",
-        inet_ntoa(client_address.sin_addr),
-        client_address.sin_port);
   }
 
   thread_pool_shutdown(thpool);

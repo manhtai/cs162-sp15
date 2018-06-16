@@ -1,6 +1,8 @@
+#include <stdio.h>
+#include <unistd.h>
+
 #include "wq.h"
 #include "threadpool.h"
-#include <stdio.h>
 
 static void *thread_pool_routine(void *thpool);
 
@@ -128,7 +130,6 @@ int thread_pool_shutdown(threadpool* pool) {
   } while(0);
 
   free(pool->threads);
-  free(pool->queue);
   pthread_mutex_lock(&(pool->lock));
   pthread_mutex_destroy(&(pool->lock));
   pthread_cond_destroy(&(pool->notify));
@@ -163,6 +164,7 @@ static void *thread_pool_routine(void *thpool) {
 
         /* Serve request */
         pool->request_handler(client_socket_number);
+        close(client_socket_number);
     }
 
     pthread_mutex_unlock(&(pool->lock));
