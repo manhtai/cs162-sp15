@@ -19,7 +19,6 @@
 
 #ifndef LIBHTTP_H
 #define LIBHTTP_H
-#include <pthread.h>
 
 /*
  * Functions for parsing an HTTP request.
@@ -48,8 +47,6 @@ char *http_get_mime_type(char *file_name);
 struct sock_fd {
   int c_fd;
   int p_fd;
-  pthread_mutex_t lock;
-  pthread_cond_t notify;
 };
 
 #endif

@@ -33,6 +33,7 @@ char *server_files_directory;
 char *server_proxy_hostname;
 int server_proxy_port;
 
+char buffer[MAX_BUFF];
 
 int cat(char* filename, char** result);
 int ls(char* dir, char** result);
@@ -262,11 +263,6 @@ void handle_proxy_request(int fd) {
   s->p_fd = fd;
   s->c_fd = client_socket_fd;
 
-  if((pthread_mutex_init(&(s->lock), NULL) != 0) || (pthread_cond_init(&(s->notify), NULL) != 0)){
-    perror("Init lock or conditional var error");
-    return;
-  }
-
   if (pthread_create(&client_to_proxy_t, NULL, handle_proxy_routine_c, (void*) s) != 0) {
     perror("Error create client_to_proxy thread");
   }
@@ -277,10 +273,6 @@ void handle_proxy_request(int fd) {
 
   pthread_join(proxy_to_client_t, NULL);
   pthread_join(client_to_proxy_t, NULL);
-
-  pthread_mutex_lock(&(s->lock));
-  pthread_mutex_destroy(&(s->lock));
-  pthread_cond_destroy(&(s->notify));
   free(s);
 }
 
@@ -296,7 +288,6 @@ static void* handle_proxy_routine_p(void* sock) {
 
 
 static void* handle_proxy_routine(int is_client, struct sock_fd* s) {
-  char *buffer = (char*) malloc(MAX_BUFF + 1);
   int nread;
   int c_fd;
   int p_fd;
@@ -309,16 +300,15 @@ static void* handle_proxy_routine(int is_client, struct sock_fd* s) {
     c_fd = s->p_fd;
   }
 
-  pthread_mutex_lock(&(s->lock));
-  while ((nread = read(p_fd, buffer, MAX_BUFF)) < 0) {
-    printf("Wait...");
-    pthread_cond_wait(&(s->notify), &(s->lock));
-  }
-  printf("Send to %d\n", c_fd);
-  pthread_cond_signal(&(s->notify));
-  http_send_data(c_fd, buffer, nread);
-  free(buffer);
-  pthread_mutex_unlock(&(s->lock));
+  do {
+    if ((nread = read(p_fd, buffer, MAX_BUFF)) < 0) {
+      perror("Can't not read");
+      break;
+    }
+    printf("Send to %d\n", c_fd);
+
+    http_send_data(c_fd, buffer, nread);
+  } while (0);
 
   return NULL;
 }
