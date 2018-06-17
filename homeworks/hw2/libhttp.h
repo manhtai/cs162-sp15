@@ -19,6 +19,7 @@
 
 #ifndef LIBHTTP_H
 #define LIBHTTP_H
+#include <pthread.h>
 
 /*
  * Functions for parsing an HTTP request.
@@ -43,5 +44,12 @@ void http_send_data(int fd, char *data, size_t size);
  * Helper function: gets the Content-Type based on a file name.
  */
 char *http_get_mime_type(char *file_name);
+
+struct sock_fd {
+  int c_fd;
+  int p_fd;
+  pthread_mutex_t lock;
+  pthread_cond_t notify;
+};
 
 #endif

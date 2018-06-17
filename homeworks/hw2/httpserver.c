@@ -18,6 +18,8 @@
 #include "libhttp.h"
 #include "threadpool.h"
 
+#define MAX_BUFF 8192
+
 /*
  * Global configuration variables.
  * You need to use these in your implementation of handle_files_request and
@@ -39,6 +41,11 @@ char* serve_directory(char* dir, char** result, int* size);
 void http200(int fd, char* message, char* mime_type, int size);
 void http404(int fd);
 void http500(int fd);
+
+static void* handle_proxy_routine(int is_client, struct sock_fd* sock_fd);
+static void* handle_proxy_routine_c(void* sock_fd);
+static void* handle_proxy_routine_p(void* sock_fd);
+
 /*
  * Reads an HTTP request from stream (fd), and writes an HTTP response
  * containing:
@@ -242,12 +249,78 @@ void handle_proxy_request(int fd) {
     http_end_headers(fd);
     http_send_string(fd, "<center><h1>502 Bad Gateway</h1><hr></center>");
     return;
-
   }
 
-  /* 
-  * TODO: Your solution for task 3 belongs here! 
-  */
+  /* Our code here */
+  pthread_t client_to_proxy_t;
+  pthread_t proxy_to_client_t;
+
+  struct sock_fd* s;
+
+  s = (struct sock_fd*) malloc(sizeof(struct sock_fd*));
+
+  s->p_fd = fd;
+  s->c_fd = client_socket_fd;
+
+  if((pthread_mutex_init(&(s->lock), NULL) != 0) || (pthread_cond_init(&(s->notify), NULL) != 0)){
+    perror("Init lock or conditional var error");
+    return;
+  }
+
+  if (pthread_create(&client_to_proxy_t, NULL, handle_proxy_routine_c, (void*) s) != 0) {
+    perror("Error create client_to_proxy thread");
+  }
+
+  if (pthread_create(&proxy_to_client_t, NULL, handle_proxy_routine_p, (void*) s) != 0) {
+    perror("Error create proxy_to_client thread");
+  }
+
+  pthread_join(proxy_to_client_t, NULL);
+  pthread_join(client_to_proxy_t, NULL);
+
+  pthread_mutex_lock(&(s->lock));
+  pthread_mutex_destroy(&(s->lock));
+  pthread_cond_destroy(&(s->notify));
+  free(s);
+}
+
+static void* handle_proxy_routine_c(void* sock) {
+  struct sock_fd *s = (struct sock_fd *) sock;
+  return handle_proxy_routine(1, s);
+}
+
+static void* handle_proxy_routine_p(void* sock) {
+  struct sock_fd *s = (struct sock_fd *) sock;
+  return handle_proxy_routine(0, s);
+}
+
+
+static void* handle_proxy_routine(int is_client, struct sock_fd* s) {
+  char *buffer = (char*) malloc(MAX_BUFF + 1);
+  int nread;
+  int c_fd;
+  int p_fd;
+
+  if (is_client) {
+    c_fd = s->c_fd;
+    p_fd = s->p_fd;
+  } else {
+    p_fd = s->c_fd;
+    c_fd = s->p_fd;
+  }
+
+  pthread_mutex_lock(&(s->lock));
+  while ((nread = read(p_fd, buffer, MAX_BUFF)) < 0) {
+    printf("Wait...");
+    pthread_cond_wait(&(s->notify), &(s->lock));
+  }
+  printf("Send to %d\n", c_fd);
+  pthread_cond_signal(&(s->notify));
+  http_send_data(c_fd, buffer, nread);
+  free(buffer);
+  pthread_mutex_unlock(&(s->lock));
+
+  return NULL;
 }
 
 /*
