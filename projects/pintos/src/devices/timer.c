@@ -90,6 +90,9 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks)
 {
+
+  if (ticks <= 0) return;
+
   struct thread *t = thread_current();
   uint64_t block_util = timer_ticks() + ticks;
 
@@ -182,7 +185,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
 void
 unblock_slept_thread (struct thread *t, void *aux UNUSED)
 {
-  if (t->status == THREAD_BLOCKED && t->block_util > 0 && t->block_util < timer_ticks ()) {
+  if (t->status == THREAD_BLOCKED && t->block_util > 0 && t->block_util <= timer_ticks ()) {
     thread_unblock(t);
   }
 }
